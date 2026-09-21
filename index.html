@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LTS Driver Messenger</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#eef2f6;color:#17202a}
+.wrap{max-width:1700px;margin:0 auto;padding:20px}
+.top{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap}
+h1{margin:0;font-size:27px;color:#17365D}.stats{font-size:13px;color:#5b6573;margin-top:5px}
+.card{background:#fff;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.07);padding:16px;margin-bottom:14px}
+.toolbar{display:grid;grid-template-columns:2fr repeat(4,1fr);gap:10px}.campaign{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:1100px){.toolbar{grid-template-columns:1fr 1fr}.campaign{grid-template-columns:1fr}}
+@media(max-width:650px){.toolbar{grid-template-columns:1fr}}
+input,textarea,select,button{font:inherit;border:1px solid #cbd3dc;border-radius:8px;padding:10px;background:#fff}
+textarea{width:100%;min-height:90px;resize:vertical}button{cursor:pointer;font-weight:700}
+.primary{background:#1769aa;color:#fff;border-color:#1769aa}.green{background:#2e7d32;color:#fff;border-color:#2e7d32}.wa{background:#1d9f5a;color:#fff;border-color:#1d9f5a}.danger{background:#fff2f2;color:#a61b1b;border-color:#e6b7b7}.light{background:#f5f8fb}
+.controls,.userbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.controls button{width:auto}
+label{font-size:12px;font-weight:700;display:block;margin-bottom:5px;color:#4c5968}.small{font-size:12px;color:#6b7580}.name{font-weight:700}
+.list{overflow:auto;max-height:62vh;border:1px solid #d9e0e8;border-radius:10px}table{width:100%;border-collapse:collapse;min-width:1550px}
+thead th{position:sticky;top:0;background:#17365D;color:#fff;z-index:2;padding:10px;text-align:left;font-size:12px}tbody td{border-bottom:1px solid #e8edf2;padding:8px;vertical-align:top}tbody tr:nth-child(even){background:#f8fbfe}tbody tr.selected{background:#e8f3ff}tbody tr.inactive{opacity:.65}
+.rowmsg{width:100%;min-height:58px}.check{width:18px;height:18px}.pill{display:inline-block;padding:3px 7px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}.ok{background:#e0f2e3;color:#216a2a}.missing{background:#fff0d7;color:#8b5b00}.bad{background:#fde5e5;color:#9f1c1c}.info{background:#e7f0ff;color:#245b9b}
+.footer{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}.result{margin-top:12px;padding:10px;border-radius:8px;background:#f3f7fb;white-space:pre-wrap;display:none}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);align-items:center;justify-content:center;padding:16px;z-index:20}.modalbox{background:#fff;width:min(760px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:18px}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:650px){.formgrid{grid-template-columns:1fr}}
+.queue{display:none;background:#eaf8ef;border:1px solid #b9dfc5;border-radius:10px;padding:12px;margin-top:12px}
+.loginOverlay{position:fixed;inset:0;background:#eef2f6;display:flex;align-items:center;justify-content:center;padding:20px;z-index:9999}.loginBox{width:min(430px,100%);background:#fff;padding:24px;border-radius:16px;box-shadow:0 8px 28px rgba(0,0,0,.12)}.loginBox h2{margin:0 0 18px;color:#17365D}.loginBox input{width:100%;margin-bottom:10px}.loginError{color:#a61b1b;font-size:13px;min-height:18px;margin:6px 0}
+.readonly{background:#f3f5f7}.sectionTitle{margin:4px 0 10px;color:#17365D;font-weight:700}.muted{color:#718096}
+</style>
+</head>
+<body>
+<div id="loginOverlay" class="loginOverlay">
+  <div class="loginBox">
+    <h2>LTS Driver Messenger</h2>
+    <label>Username</label><input id="loginUser" autocomplete="username">
+    <label>Password</label><input id="loginPass" type="password" autocomplete="current-password">
+    <div id="loginError" class="loginError"></div>
+    <button class="primary" style="width:100%" onclick="login()">LOGIN</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="top">
+    <div><h1>LTS Driver Messenger</h1><div class="stats" id="stats">Login required</div></div>
+    <div class="userbar">
+      <span id="loggedUser" class="small"></span>
+      <button id="addDriverBtn" onclick="openContact()" style="display:none">+ Add Driver</button>
+      <button id="manageUsersBtn" onclick="openUsers()" style="display:none">Manage Users</button>
+      <button onclick="refreshQRStatus()">Refresh QR Status</button>
+      <button onclick="loadAll()">Refresh</button>
+      <button class="danger" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <div><label>Search</label><input id="search" style="width:100%" placeholder="Name, ID, email or phone" oninput="render()"></div>
+      <div><label>Status</label><select id="filterStatus" style="width:100%" onchange="render()"><option value="">All</option><option>Active</option><option>Not Active</option></select></div>
+      <div><label>Preferred Channel</label><select id="filterChannel" style="width:100%" onchange="render()"><option value="">All</option><option>Email</option><option>WhatsApp</option><option>Both</option><option>None</option></select></div>
+      <div><label>Language</label><select id="filterLanguage" style="width:100%" onchange="render()"><option value="">All</option><option>DE</option><option>EN</option><option>Other</option></select></div>
+      <div><label>QR Status</label><select id="filterQR" style="width:100%" onchange="render()"><option value="">All</option><option>Found</option><option>Missing</option><option>Not Checked</option></select></div>
+    </div>
+
+    <div class="campaign" style="margin-top:12px">
+      <div>
+        <label>Attachment mode</label>
+        <select id="attachmentMode" style="width:100%" onchange="toggleSameFile()">
+          <option value="DRIVER_QR">Each driver's QR</option>
+          <option value="PERSONAL_FILE">Each driver's personal file</option>
+          <option value="SAME_FILE">Same Drive file for everyone</option>
+          <option value="MESSAGE_ONLY">Message only</option>
+        </select>
+        <div id="sameFileWrap" style="display:none;margin-top:8px"><label>Same Drive file ID / URL</label><input id="sameFileId" style="width:100%"></div>
+        <div style="margin-top:10px"><label>Email subject</label><input id="subject" style="width:100%" value="LTS Information"></div>
+      </div>
+      <div>
+        <label>Global message — placeholders: {name}, {id}, {email}, {phone}, {language}</label>
+        <textarea id="globalMessage" placeholder="Hello {name},&#10;&#10;Please find your personal QR attached."></textarea>
+      </div>
+    </div>
+
+    <div class="controls" style="margin-top:10px">
+      <button onclick="selectVisible(true)">Select All Visible</button>
+      <button onclick="selectVisible(false)">Clear Visible</button>
+      <button onclick="applyGlobal()">Apply Global Message to Selected</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="list">
+      <table>
+        <thead><tr>
+          <th>Send</th><th>ID</th><th>Name</th><th>Status</th><th>Preferred</th><th>Language</th><th>Email</th><th>WhatsApp</th><th>QR</th><th>Last Contacted</th><th style="min-width:340px">Personal Message</th><th>Edit</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="footer">
+      <div><b id="selectedCount">0 selected</b></div>
+      <div class="controls">
+        <button class="green" onclick="sendEmail()">SEND SELECTED BY EMAIL</button>
+        <button class="wa" onclick="startWhatsAppQueue()">NORMAL WHATSAPP QUEUE</button>
+        <button class="wa" onclick="sendWhatsAppAPI()">WHATSAPP CLOUD API</button>
+      </div>
+    </div>
+
+    <div id="waQueue" class="queue">
+      <b id="waQueueTitle"></b>
+      <div id="waQueueMeta" class="small" style="margin-top:6px"></div>
+      <div id="waQueueText" style="margin:10px 0;white-space:pre-wrap"></div>
+      <div class="controls">
+        <button class="wa" onclick="openCurrentWhatsApp()">Open WhatsApp</button>
+        <button class="green" onclick="markSentAndNext()">MARK SENT + NEXT</button>
+        <button onclick="skipWhatsApp()">Skip</button>
+        <button onclick="stopWhatsAppQueue()">Close Queue</button>
+      </div>
+      <div class="small" style="margin-top:8px">For normal WhatsApp, attach the QR manually if needed. Click MARK SENT + NEXT only after you actually send it.</div>
+    </div>
+
+    <div id="result" class="result"></div>
+  </div>
+</div>
+
+<!-- CONTACT MODAL -->
+<div id="modal" class="modal">
+  <div class="modalbox">
+    <h3 id="modalTitle">Driver</h3>
+    <div class="formgrid">
+      <div><label>Driver ID</label><input id="mId" style="width:100%"></div>
+      <div><label>Name</label><input id="mName" style="width:100%"></div>
+      <div><label>Email</label><input id="mEmail" style="width:100%"></div>
+      <div><label>WhatsApp Phone</label><input id="mPhone" style="width:100%" placeholder="+43..."></div>
+      <div><label>Status</label><select id="mStatus" style="width:100%"><option>Active</option><option>Not Active</option></select></div>
+      <div><label>Preferred Channel</label><select id="mChannel" style="width:100%"><option>Email</option><option>WhatsApp</option><option>Both</option><option>None</option></select></div>
+      <div><label>Language</label><select id="mLanguage" style="width:100%"><option value=""></option><option>DE</option><option>EN</option><option>Other</option></select></div>
+      <div><label>QR Status</label><input id="mQRStatus" class="readonly" style="width:100%" readonly></div>
+      <div style="grid-column:1/-1"><label>Last Contacted</label><input id="mLastContacted" class="readonly" style="width:100%" readonly></div>
+      <div style="grid-column:1/-1"><label>Default Message</label><textarea id="mDefault"></textarea></div>
+      <div style="grid-column:1/-1"><label>Personal Drive File ID / URL</label><input id="mFile" style="width:100%"></div>
+      <div style="grid-column:1/-1"><label>Notes</label><textarea id="mNotes"></textarea></div>
+    </div>
+    <div class="controls" style="margin-top:12px;justify-content:flex-end">
+      <button class="danger" id="deleteBtn" onclick="deleteCurrent()">Delete</button>
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="saveCurrent()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- USERS MODAL -->
+<div id="usersModal" class="modal">
+  <div class="modalbox" style="width:min(950px,100%)">
+    <h3>User Management</h3>
+    <div class="formgrid">
+      <div><label>Username</label><input id="uUsername" style="width:100%"></div>
+      <div><label>Display Name</label><input id="uDisplayName" style="width:100%"></div>
+      <div><label>Role</label><select id="uRole" style="width:100%"><option>USER</option><option>ADMIN</option></select></div>
+      <div><label>Password</label><input id="uPassword" type="password" style="width:100%" placeholder="Required for new user; blank keeps current password"></div>
+      <div><label>Active</label><select id="uActive" style="width:100%"><option value="true">Active</option><option value="false">Inactive</option></select></div>
+    </div>
+    <div class="controls" style="margin-top:12px"><button class="primary" onclick="saveUserFromForm()">Save User</button><button onclick="clearUserForm()">New / Clear</button><button onclick="closeUsers()">Close</button></div>
+    <div class="list" style="margin-top:14px;max-height:360px"><table style="min-width:760px"><thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Active</th><th>Last Modified</th><th>Actions</th></tr></thead><tbody id="usersBody"></tbody></table></div>
+  </div>
+</div>
+
+<script>
+/* Paste your deployed Apps Script /exec URL here. */
+const API_URL = 'PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE';
+
+let AUTH_TOKEN = sessionStorage.getItem('ltsMessengerToken') || '';
+let AUTH_USER = null;
+let inactivityTimer = null;
+const LOCAL_INACTIVITY_MS = 30 * 60 * 1000;
+
+let contacts = [];
+let selected = {};
+let messages = {};
+let editingId = '';
+let waItems = [];
+let waIndex = 0;
+let users = [];
+const pending = {};
+
+window.addEventListener('message', event => {
+  const data = event.data || {};
+  if (!data.requestId || !pending[data.requestId]) return;
+  const p = pending[data.requestId];
+  delete pending[data.requestId];
+
+  if (data.ok) p.resolve(data.result);
+  else {
+    if (data.authError) forceLogin('Your session expired. Please log in again.');
+    p.reject(new Error(data.adminError ? 'ADMIN permission required.' : (data.error || 'Backend request failed.')));
+  }
+});
+
+function api(action, data = {}) {
+  if (!API_URL || API_URL.includes('PASTE_YOUR_')) {
+    return Promise.reject(new Error('Add your Apps Script /exec URL to API_URL inside index.html first.'));
+  }
+  resetInactivity();
+
+  return new Promise((resolve,reject) => {
+    const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    pending[requestId] = {resolve,reject};
+
+    const iframe = document.createElement('iframe');
+    iframe.name = 'api_' + requestId;
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    const form = document.createElement('form');
+    form.method = 'POST'; form.action = API_URL; form.target = iframe.name; form.style.display = 'none';
+    const input = document.createElement('input');
+    input.type = 'hidden'; input.name = 'payload';
+    input.value = JSON.stringify({action,data,requestId,token:AUTH_TOKEN});
+    form.appendChild(input); document.body.appendChild(form);
+
+    const timeout = setTimeout(() => {
+      if (pending[requestId]) {
+        delete pending[requestId];
+        reject(new Error('Backend timeout. Check Apps Script deployment and permissions.'));
+      }
+      form.remove(); iframe.remove();
+    },30000);
+
+    const r0 = pending[requestId].resolve, j0 = pending[requestId].reject;
+    pending[requestId].resolve = v => { clearTimeout(timeout); setTimeout(()=>{form.remove();iframe.remove();},50); r0(v); };
+    pending[requestId].reject = e => { clearTimeout(timeout); setTimeout(()=>{form.remove();iframe.remove();},50); j0(e); };
+    form.submit();
+  });
+}
+
+function isAdmin(){ return !!(AUTH_USER && String(AUTH_USER.role||'').toUpperCase()==='ADMIN'); }
+function applyRoleUI(){
+  document.getElementById('addDriverBtn').style.display = isAdmin() ? 'inline-block' : 'none';
+  document.getElementById('manageUsersBtn').style.display = isAdmin() ? 'inline-block' : 'none';
+}
+function resetInactivity(){ clearTimeout(inactivityTimer); if (!AUTH_TOKEN) return; inactivityTimer=setTimeout(()=>logout(true),LOCAL_INACTIVITY_MS); }
+['click','keydown','mousemove','touchstart'].forEach(evt=>document.addEventListener(evt,resetInactivity,{passive:true}));
+function showLogin(message=''){ document.getElementById('loginOverlay').style.display='flex'; document.getElementById('loginError').textContent=message; document.getElementById('loginPass').value=''; }
+function hideLogin(){ document.getElementById('loginOverlay').style.display='none'; }
+function forceLogin(message=''){ AUTH_TOKEN=''; AUTH_USER=null; sessionStorage.removeItem('ltsMessengerToken'); clearTimeout(inactivityTimer); showLogin(message); }
+
+async function login(){
+  const username=document.getElementById('loginUser').value.trim();
+  const password=document.getElementById('loginPass').value;
+  document.getElementById('loginError').textContent='Logging in...';
+  try{
+    const res=await api('login',{username,password});
+    AUTH_TOKEN=res.token; AUTH_USER=res; sessionStorage.setItem('ltsMessengerToken',AUTH_TOKEN);
+    document.getElementById('loggedUser').textContent=`${res.displayName} (${res.role})`;
+    applyRoleUI(); hideLogin(); resetInactivity(); await loadAll();
+  }catch(e){ document.getElementById('loginError').textContent=e.message; }
+}
+
+async function logout(localOnly=false){
+  const old=AUTH_TOKEN; AUTH_TOKEN=''; AUTH_USER=null; sessionStorage.removeItem('ltsMessengerToken'); clearTimeout(inactivityTimer);
+  if (!localOnly && old){ try{ AUTH_TOKEN=old; await api('logout',{}); }catch(e){} AUTH_TOKEN=''; }
+  contacts=[]; selected={}; render(); showLogin('');
+}
+
+async function restoreSession(){
+  if (!AUTH_TOKEN) return showLogin('');
+  try{
+    const s=await api('getSession',{}); AUTH_USER=s;
+    document.getElementById('loggedUser').textContent=`${s.displayName} (${s.role})`;
+    applyRoleUI(); hideLogin(); resetInactivity(); await loadAll();
+  }catch(e){ forceLogin('Please log in.'); }
+}
+
+document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter') login();});
+
+async function loadAll(){
+  setResult('Loading...');
+  try{
+    const [c,info]=await Promise.all([api('getContacts'),api('getAppInfo')]);
+    contacts=c;
+    contacts.forEach(x=>{ if(messages[x.id]===undefined) messages[x.id]=x.defaultMessage||''; });
+    document.getElementById('stats').textContent = `${info.contactCount} drivers • ${info.activeCount} active • Email quota ${info.emailQuota} • QR Found ${info.qrFound} / Missing ${info.qrMissing} / Not checked ${info.qrNotChecked} • Cloud API ${info.whatsappConfigured?'configured':'not configured'}`;
+    render(); hideResult();
+  }catch(e){ setResult(e.message); }
+}
+
+function filtered(){
+  const q=document.getElementById('search').value.trim().toLowerCase();
+  const fs=document.getElementById('filterStatus').value;
+  const fc=document.getElementById('filterChannel').value;
+  const fl=document.getElementById('filterLanguage').value;
+  const fq=document.getElementById('filterQR').value;
+  return contacts.filter(c=>{
+    const hit=!q || [c.id,c.name,c.email,c.phone].join(' ').toLowerCase().includes(q);
+    return hit && (!fs||c.status===fs) && (!fc||c.preferredChannel===fc) && (!fl||c.language===fl) && (!fq||c.qrStatus===fq);
+  });
+}
+
+function esc(s){ return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function pill(text,cls='info'){ return `<span class="pill ${cls}">${esc(text||'—')}</span>`; }
+
+function render(){
+  const tb=document.getElementById('tbody');
+  tb.innerHTML=filtered().map(c=>{
+    const sel=!!selected[c.id], inactive=c.status==='Not Active';
+    const emailStatus=c.email?pill('Email','ok'):pill('No email','missing');
+    const phoneStatus=c.phone?pill('Phone','ok'):pill('No phone','missing');
+    const qrClass=c.qrStatus==='Found'?'ok':(c.qrStatus==='Missing'?'bad':'missing');
+    return `<tr class="${sel?'selected ':''}${inactive?'inactive':''}">
+      <td><input class="check" type="checkbox" ${sel?'checked':''} ${inactive?'disabled title="Not Active"':''} onchange="toggleSel('${esc(c.id)}',this.checked)"></td>
+      <td><b>${esc(c.id)}</b></td><td><div class="name">${esc(c.name)}</div></td>
+      <td>${pill(c.status,inactive?'bad':'ok')}</td><td>${pill(c.preferredChannel||'None','info')}</td><td>${pill(c.language||'—','info')}</td>
+      <td>${esc(c.email)}<br>${emailStatus}</td><td>${esc(c.phone)}<br>${phoneStatus}</td>
+      <td>${pill(c.qrStatus||'Not Checked',qrClass)}</td><td>${esc(c.lastContacted||'—')}</td>
+      <td><textarea class="rowmsg" oninput="messages['${esc(c.id)}']=this.value">${esc(messages[c.id]||'')}</textarea></td>
+      <td>${isAdmin()?`<button onclick="openContact('${esc(c.id)}')">Edit</button>`:'—'}</td></tr>`;
+  }).join('');
+  updateSelectedCount();
+}
+
+function toggleSel(id,on){ selected[id]=on; render(); }
+function updateSelectedCount(){ document.getElementById('selectedCount').textContent=`${Object.values(selected).filter(Boolean).length} selected`; }
+function selectVisible(on){ filtered().forEach(c=>{ if(c.status!=='Not Active') selected[c.id]=on; }); render(); }
+function applyGlobal(){ const text=document.getElementById('globalMessage').value; contacts.filter(c=>selected[c.id]).forEach(c=>messages[c.id]=text); render(); }
+function toggleSameFile(){ document.getElementById('sameFileWrap').style.display=document.getElementById('attachmentMode').value==='SAME_FILE'?'block':'none'; }
+function selectedPayload(){ return contacts.filter(c=>selected[c.id] && c.status!=='Not Active').map(c=>({id:c.id,message:messages[c.id]||''})); }
+
+async function refreshQRStatus(){
+  if(!confirm('Check the Google Drive QR folder now?')) return;
+  setResult('Checking QR files...');
+  try{ const r=await api('refreshQRStatus',{}); setResult(`QR check finished. Found: ${r.found}\nMissing: ${r.missing}`); await loadAll(); }
+  catch(e){ setResult(e.message); }
+}
+
+async function sendEmail(){
+  const items=selectedPayload(); if(!items.length) return alert('Select at least one Active driver.');
+  if(!confirm(`Send email to ${items.length} selected drivers?`)) return;
+  setResult('Sending email...');
+  try{
+    const res=await api('sendEmailSelected',{items,subject:document.getElementById('subject').value,attachmentMode:document.getElementById('attachmentMode').value,sameFileId:document.getElementById('sameFileId').value});
+    showResults(res.results,`Email finished. Remaining quota: ${res.remainingEmailQuota}`); await loadAll();
+  }catch(e){setResult(e.message);}
+}
+
+async function sendWhatsAppAPI(){
+  const items=selectedPayload(); if(!items.length) return alert('Select at least one Active driver.');
+  if(!confirm(`Send WhatsApp through Cloud API to ${items.length} selected drivers?`)) return;
+  setResult('Sending WhatsApp...');
+  try{ const res=await api('sendWhatsAppSelected',{items,attachmentMode:document.getElementById('attachmentMode').value,sameFileId:document.getElementById('sameFileId').value}); showResults(res.results,'WhatsApp finished.'); await loadAll(); }
+  catch(e){setResult(e.message);}
+}
+
+function startWhatsAppQueue(){
+  waItems=contacts.filter(c=>selected[c.id] && c.status!=='Not Active' && c.phone);
+  if(!waItems.length) return alert('Select Active drivers with WhatsApp phone numbers.');
+  waIndex=0; document.getElementById('waQueue').style.display='block'; showWhatsAppCurrent();
+}
+function personalizeLocal(text,c){ return String(text||'').replace(/\{name\}/gi,c.name||'').replace(/\{id\}/gi,c.id||'').replace(/\{email\}/gi,c.email||'').replace(/\{phone\}/gi,c.phone||'').replace(/\{language\}/gi,c.language||''); }
+function showWhatsAppCurrent(){
+  if(!waItems.length || waIndex>=waItems.length){ document.getElementById('waQueueTitle').textContent='WhatsApp queue finished'; document.getElementById('waQueueMeta').textContent=''; document.getElementById('waQueueText').textContent=''; return; }
+  const c=waItems[waIndex];
+  document.getElementById('waQueueTitle').textContent=`${waIndex+1} / ${waItems.length} — ${c.name} (${c.id})`;
+  document.getElementById('waQueueMeta').textContent=`${c.phone} • QR: ${c.qrStatus} • Preferred: ${c.preferredChannel} • Language: ${c.language||'—'}`;
+  document.getElementById('waQueueText').textContent=personalizeLocal(messages[c.id]||c.defaultMessage||'',c);
+}
+function openCurrentWhatsApp(){ if(!waItems.length||waIndex>=waItems.length)return; const c=waItems[waIndex], phone=String(c.phone||'').replace(/[^\d]/g,''), msg=personalizeLocal(messages[c.id]||c.defaultMessage||'',c); window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`,'_blank'); }
+async function markSentAndNext(){
+  if(!waItems.length||waIndex>=waItems.length)return;
+  const c=waItems[waIndex];
+  try{
+    await api('markManualWhatsAppSent',{driverId:c.id,message:messages[c.id]||c.defaultMessage||'',attachment:document.getElementById('attachmentMode').value==='DRIVER_QR' ? c.id+'.png' : document.getElementById('attachmentMode').value});
+    waIndex++; showWhatsAppCurrent(); await loadAll();
+  }catch(e){alert(e.message);}
+}
+function skipWhatsApp(){ if(!waItems.length)return; waIndex++; showWhatsAppCurrent(); }
+function stopWhatsAppQueue(){ document.getElementById('waQueue').style.display='none'; waItems=[]; waIndex=0; }
+
+function showResults(results,title){ const sent=results.filter(x=>x.status==='SENT').length, failed=results.length-sent; const errors=results.filter(x=>x.status!=='SENT').slice(0,20).map(x=>`${x.id} ${x.name}: ${x.error}`).join('\n'); setResult(`${title}\nSent: ${sent}\nFailed: ${failed}`+(errors?'\n\n'+errors:'')); }
+function setResult(t){ const el=document.getElementById('result'); el.style.display='block'; el.textContent=t; }
+function hideResult(){ document.getElementById('result').style.display='none'; }
+
+function openContact(id=''){
+  if(!isAdmin()) return alert('ADMIN permission required.');
+  editingId=id;
+  const c=contacts.find(x=>x.id===id)||{id:'',name:'',email:'',phone:'',defaultMessage:'',personalFile:'',notes:'',status:'Active',preferredChannel:'Both',language:'',qrStatus:'Not Checked',lastContacted:''};
+  document.getElementById('modalTitle').textContent=id?'Edit Driver':'Add Driver';
+  document.getElementById('mId').value=c.id; document.getElementById('mName').value=c.name; document.getElementById('mEmail').value=c.email; document.getElementById('mPhone').value=c.phone; document.getElementById('mStatus').value=c.status||'Active'; document.getElementById('mChannel').value=c.preferredChannel||'Both'; document.getElementById('mLanguage').value=c.language||''; document.getElementById('mQRStatus').value=c.qrStatus||'Not Checked'; document.getElementById('mLastContacted').value=c.lastContacted||''; document.getElementById('mDefault').value=c.defaultMessage; document.getElementById('mFile').value=c.personalFile; document.getElementById('mNotes').value=c.notes;
+  document.getElementById('mId').disabled=!!id; document.getElementById('deleteBtn').style.display=id?'inline-block':'none'; document.getElementById('modal').style.display='flex';
+}
+function closeModal(){ document.getElementById('modal').style.display='none'; }
+async function saveCurrent(){
+  const c={id:document.getElementById('mId').value.trim(),name:document.getElementById('mName').value.trim(),email:document.getElementById('mEmail').value.trim(),phone:document.getElementById('mPhone').value.trim(),status:document.getElementById('mStatus').value,preferredChannel:document.getElementById('mChannel').value,language:document.getElementById('mLanguage').value,qrStatus:document.getElementById('mQRStatus').value,defaultMessage:document.getElementById('mDefault').value,personalFile:document.getElementById('mFile').value.trim(),notes:document.getElementById('mNotes').value};
+  if(!c.id)return alert('Driver ID is required.');
+  try{await api('saveContact',c); closeModal(); await loadAll();}catch(e){alert(e.message);}
+}
+async function deleteCurrent(){ if(!editingId)return; if(!confirm(`Delete driver ${editingId} from Messenger contacts?`))return; try{await api('deleteContact',{driverId:editingId}); delete selected[editingId]; delete messages[editingId]; closeModal(); await loadAll();}catch(e){alert(e.message);} }
+
+async function openUsers(){ if(!isAdmin())return alert('ADMIN permission required.'); document.getElementById('usersModal').style.display='flex'; clearUserForm(); await loadUsers(); }
+function closeUsers(){ document.getElementById('usersModal').style.display='none'; }
+function clearUserForm(){ document.getElementById('uUsername').value=''; document.getElementById('uUsername').disabled=false; document.getElementById('uDisplayName').value=''; document.getElementById('uRole').value='USER'; document.getElementById('uPassword').value=''; document.getElementById('uActive').value='true'; }
+async function loadUsers(){
+  try{ users=await api('getUsers',{}); document.getElementById('usersBody').innerHTML=users.map(u=>`<tr><td><b>${esc(u.username)}</b></td><td>${esc(u.displayName)}</td><td>${pill(u.role,u.role==='ADMIN'?'ok':'info')}</td><td>${pill(u.active?'Active':'Inactive',u.active?'ok':'bad')}</td><td>${esc(u.lastModified||'—')}</td><td><button onclick="editUser('${esc(u.username)}')">Edit</button> <button class="danger" onclick="deleteUser('${esc(u.username)}')">Delete</button></td></tr>`).join(''); }catch(e){alert(e.message);}
+}
+function editUser(username){ const u=users.find(x=>x.username===username); if(!u)return; document.getElementById('uUsername').value=u.username; document.getElementById('uUsername').disabled=true; document.getElementById('uDisplayName').value=u.displayName; document.getElementById('uRole').value=u.role; document.getElementById('uPassword').value=''; document.getElementById('uActive').value=String(!!u.active); }
+async function saveUserFromForm(){
+  const data={username:document.getElementById('uUsername').value.trim(),displayName:document.getElementById('uDisplayName').value.trim(),role:document.getElementById('uRole').value,password:document.getElementById('uPassword').value,active:document.getElementById('uActive').value==='true'};
+  if(!data.username)return alert('Username required.');
+  try{await api('saveUser',data); clearUserForm(); await loadUsers();}catch(e){alert(e.message);}
+}
+async function deleteUser(username){ if(!confirm(`Delete user ${username}?`))return; try{await api('deleteUser',{username}); await loadUsers();}catch(e){alert(e.message);} }
+
+restoreSession();
+</script>
+</body>
+</html>
